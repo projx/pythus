@@ -1,0 +1,78 @@
+endpoints:
+  - name: google
+    group: external
+    url: "https://www.google.com"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 1000"
+
+  - name: cloudflare-dns
+    group: dns
+    url: "8.8.8.8"
+    interval: 5m
+    dns:
+      query-name: "cloudflare.com"
+      query-type: "A"
+    conditions:
+      - "[DNS_RCODE] == NOERROR"
+
+  - name: github
+    group: external
+    url: "https://github.com"
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
+      - "[CERTIFICATE_EXPIRATION] > 48h"
+
+  - name: google-search
+    group: external-web
+    url: "https://www.google.com"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 1000"
+
+  - name: github-api
+    group: external-web
+    url: "https://api.github.com"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+      - "[CERTIFICATE_EXPIRATION] > 48h"
+
+  - name: cloudflare-dns-test
+    group: dns-services
+    url: "1.1.1.1"
+    interval: 30s
+    dns:
+      query-name: "google.com"
+      query-type: "A"
+    conditions:
+      - "[DNS_RCODE] == NOERROR"
+
+  - name: google-dns-test
+    group: dns-services
+    url: "8.8.8.8"
+    interval: 30s
+    dns:
+      query-name: "github.com"
+      query-type: "A"
+    conditions:
+      - "[DNS_RCODE] == NOERROR"
+
+  - name: local-network
+    group: internal
+    url: "http://localhost:8081"
+    interval: 15s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 100"
+
+  - name: example-ssl
+    group: security
+    url: "https://expired.badssl.com"
+    interval: 1m
+    conditions:
+      - "[CERTIFICATE_EXPIRATION] > 0h"

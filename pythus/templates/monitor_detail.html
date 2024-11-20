@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ monitor.name }} - Monitor Details</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8 flex justify-between items-center">
+            <h1 class="text-2xl font-bold">{{ monitor.name }}</h1>
+            <a href="/" class="text-blue-600 hover:text-blue-800 hover:underline">← Back to Dashboard</a>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="text-gray-600 text-sm mb-2">URL</div>
+                <div class="font-medium">
+                    <a href="{{ monitor.url }}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">
+                        {{ monitor.url }}
+                    </a>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="text-gray-600 text-sm mb-2">Group</div>
+                <div class="font-medium">{{ monitor.group }}</div>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="text-gray-600 text-sm mb-2">Type</div>
+                <div class="font-medium">{{ monitor.config.type }}</div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-bold mb-4">Response Time</h2>
+            <div id="responseTimeChart" style="height: 400px;"></div>
+            <script>
+                const responseTimeData = {{ response_times | tojson }};
+                const timestamps = responseTimeData.map(rt => rt.timestamp);
+                const values = responseTimeData.map(rt => rt.value);
+                
+                const trace = {
+                    x: timestamps,
+                    y: values,
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: 'Response Time',
+                    line: {
+                        color: '#3B82F6',
+                        width: 2
+                    },
+                    marker: {
+                        size: 6,
+                        color: '#3B82F6'
+                    }
+                };
+                
+                const layout = {
+                    title: 'Response Time History',
+                    xaxis: {
+                        title: 'Time',
+                        showgrid: true,
+                        gridcolor: '#E5E7EB'
+                    },
+                    yaxis: {
+                        title: 'Response Time (ms)',
+                        showgrid: true,
+                        gridcolor: '#E5E7EB'
+                    },
+                    plot_bgcolor: 'white',
+                    paper_bgcolor: 'white',
+                    margin: { t: 40, r: 20, b: 40, l: 60 }
+                };
+                
+                Plotly.newPlot('responseTimeChart', [trace], layout);
+            </script>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-bold mb-4">Recent Checks</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for check in checks %}
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ check.timestamp | datetime }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ check.type }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs font-medium rounded-full {% if check.success %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                    {{ "Success" if check.success else "Failed" }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-500">{{ check.message }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-bold mb-4">Recent Logs</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Level</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for log in logs %}
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ log.timestamp | datetime }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs font-medium rounded-full
+                                    {% if log.level == 'ERROR' %}bg-red-100 text-red-800
+                                    {% elif log.level == 'WARNING' %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-green-100 text-green-800{% endif %}">
+                                    {{ log.level }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-500">{{ log.message }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
