@@ -18,7 +18,7 @@ env/
 *.wpr
 *.wpu
 .idea/
-
+*.db
 /.idea/*
 data/
 
