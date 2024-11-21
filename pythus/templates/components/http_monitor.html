@@ -1,0 +1,35 @@
+{% extends "components/base_monitor.html" %}
+
+{% block monitor_specific_content %}
+<div class="space-y-4">
+    <div>
+        <div class="text-sm text-gray-500 mb-1">URL</div>
+        <a href="{{ monitor.config.url }}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline break-all">
+            {{ monitor.config.url }}
+        </a>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+        {% if monitor.last_check.results %}
+            {% for result in monitor.last_check.results %}
+                <div>
+                    <div class="text-sm text-gray-500 mb-1">{{ result.name | title }}</div>
+                    <div class="font-medium {% if result.success %}text-green-600{% else %}text-red-600{% endif %}">
+                        {% if result.name == 'http_status' %}
+                            HTTP {{ result.details.status }}
+                        {% elif result.name == 'ssl' %}
+                            {{ result.message }}
+                        {% elif result.name == 'response_time' %}
+                            {# Skip response time since it's already shown in common metrics #}
+                        {% else %}
+                            {{ result.message }}
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-span-2 text-gray-500">No check results available</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

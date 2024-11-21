@@ -1,0 +1,37 @@
+{% extends "components/base_monitor.html" %}
+
+{% block monitor_specific_content %}
+<div class="space-y-4">
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <div class="text-sm text-gray-500 mb-1">DNS Server</div>
+            <div class="font-medium">{{ monitor.config.url }}</div>
+        </div>
+        <div>
+            <div class="text-sm text-gray-500 mb-1">Query Type</div>
+            <div class="font-medium">{{ monitor.config.dns.query_type }}</div>
+        </div>
+        <div>
+            <div class="text-sm text-gray-500 mb-1">Query Name</div>
+            <div class="font-medium">{{ monitor.config.dns.query_name }}</div>
+        </div>
+        <div>
+            <div class="text-sm text-gray-500 mb-1">Response Code</div>
+            <div class="font-medium {% if monitor.last_check.success %}text-green-600{% else %}text-red-600{% endif %}">
+                {{ monitor.last_check.results[0].details.rcode if monitor.last_check.results else 'N/A' }}
+            </div>
+        </div>
+    </div>
+
+    {% if monitor.last_check.results and monitor.last_check.results[0].details.answers %}
+    <div>
+        <div class="text-sm text-gray-500 mb-2">DNS Records</div>
+        <div class="bg-gray-50 rounded p-3 font-mono text-sm">
+            {% for answer in monitor.last_check.results[0].details.answers %}
+            <div class="mb-1">{{ answer }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Boolean, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Boolean, JSON, and_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -67,8 +67,7 @@ def init_db():
     # Create SQLite database engine
     engine = create_engine('sqlite:///pythus.db')
     
-    # Create all tables
-    Base.metadata.drop_all(engine)  # Drop existing tables
+    # Create all tables if they don't exist
     Base.metadata.create_all(engine)
     
     # Create session factory
@@ -132,37 +131,33 @@ class DatabaseManager:
             session.add(log)
             session.commit()
     
-    def get_monitor_history(self, monitor_id: int, start_time: datetime = None, end_time: datetime = None):
+    def get_monitor_history(self, monitor_id: int, start_time: datetime = None, end_time: datetime = None, limit: int = 100):
+        """Get historical data for a monitor with pagination and time range filtering."""
         with self.session_factory() as session:
             query = session.query(Monitor).filter(Monitor.id == monitor_id).first()
             
             if not query:
                 return None
             
-            # Build time filter
-            time_filter = []
+            # Build base queries with time range filters if provided
+            check_query = session.query(Check).filter(Check.monitor_id == monitor_id)
+            rt_query = session.query(ResponseTime).filter(ResponseTime.monitor_id == monitor_id)
+            log_query = session.query(Log).filter(Log.monitor_id == monitor_id)
+            
             if start_time:
-                time_filter.append(ResponseTime.created_at >= start_time)
+                check_query = check_query.filter(Check.created_at >= start_time)
+                rt_query = rt_query.filter(ResponseTime.created_at >= start_time)
+                log_query = log_query.filter(Log.created_at >= start_time)
+                
             if end_time:
-                time_filter.append(ResponseTime.created_at <= end_time)
+                check_query = check_query.filter(Check.created_at <= end_time)
+                rt_query = rt_query.filter(ResponseTime.created_at <= end_time)
+                log_query = log_query.filter(Log.created_at <= end_time)
             
-            # Get response times
-            rt_query = session.query(ResponseTime).filter(
-                ResponseTime.monitor_id == monitor_id,
-                *time_filter
-            ).order_by(ResponseTime.created_at.desc())
-            
-            # Get check results
-            check_query = session.query(Check).filter(
-                Check.monitor_id == monitor_id,
-                *time_filter
-            ).order_by(Check.created_at.desc())
-            
-            # Get logs
-            log_query = session.query(Log).filter(
-                Log.monitor_id == monitor_id,
-                *time_filter
-            ).order_by(Log.created_at.desc())
+            # Apply ordering and limit
+            check_query = check_query.order_by(Check.created_at.desc()).limit(limit)
+            rt_query = rt_query.order_by(ResponseTime.created_at.desc()).limit(limit)
+            log_query = log_query.order_by(Log.created_at.desc()).limit(limit)
             
             return {
                 'monitor': {
@@ -199,3 +194,39 @@ class DatabaseManager:
                     for log in log_query.all()
                 ]
             }
+
+    def get_logs(self, page: int = 1, per_page: int = 100):
+        """Get paginated logs ordered by newest first."""
+        with self.session_factory() as session:
+            # Get total count for pagination
+            total_count = session.query(Log).count()
+            
+            # Calculate offset
+            offset = (page - 1) * per_page
+            
+            # Get logs with monitor info
+            logs = session.query(Log, Monitor.name.label('monitor_name'))\
+                .join(Monitor)\
+                .order_by(Log.created_at.desc())\
+                .offset(offset)\
+                .limit(per_page)\
+                .all()
+            
+            # Calculate pagination info
+            total_pages = (total_count + per_page - 1) // per_page
+            has_next = page < total_pages
+            has_prev = page > 1
+            
+            return {
+                'logs': logs,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': total_pages,
+                'has_next': has_next,
+                'has_prev': has_prev,
+                'total_count': total_count
+            }
+
+# Create global database manager instance
+Session = init_db()
+db_manager = DatabaseManager(Session)

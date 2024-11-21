@@ -2,6 +2,9 @@
 /etc/*.yml
 .idea/
 stubs/
+_stubs/
+_archive/
+_archives/
 .idea/
 _archive/
 generated/*

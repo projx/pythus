@@ -1,0 +1,48 @@
+{% macro render_monitor(monitor) %}
+<div class="bg-white rounded-lg shadow-md p-4">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h3 class="text-lg font-semibold">
+                <a href="/monitors/{{ monitor.db_id }}" class="text-blue-600 hover:text-blue-800 hover:underline">
+                    {{ monitor.name }}
+                </a>
+            </h3>
+            <div class="text-sm text-gray-500">
+                <span class="mr-2">{{ monitor.config.group }}</span>
+                <span class="mr-2">•</span>
+                <span>{{ monitor.config.type }}</span>
+            </div>
+        </div>
+        <span class="px-2 py-1 text-sm font-medium rounded-full {% if monitor.last_check.success %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+            {{ "Active" if monitor.last_check.success else "Down" }}
+        </span>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+            <div class="text-sm text-gray-500">Last Check</div>
+            <div class="font-medium">{{ monitor.last_check.timestamp | datetime }}</div>
+        </div>
+        <div>
+            <div class="text-sm text-gray-500">Next Check</div>
+            <div class="font-medium">{{ (monitor.last_check_time + monitor.interval) | datetime }}</div>
+        </div>
+        <div>
+            <div class="text-sm text-gray-500">Response Time</div>
+            <div class="font-medium">
+                {% if monitor.last_check.raw_data.response_time %}
+                    {{ "%.2f"|format(monitor.last_check.raw_data.response_time) }}ms
+                {% else %}
+                    N/A
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <div class="text-sm text-gray-500">Interval</div>
+            <div class="font-medium">{{ monitor.config.interval }}</div>
+        </div>
+    </div>
+
+    {% block monitor_specific_content %}{% endblock %}
+</div>
+{% endmacro %}

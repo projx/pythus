@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -6,9 +6,10 @@ from fastapi.requests import Request
 import asyncio
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
-from .config import Config, Endpoint
+from .config import Config
 from .monitor import MonitorManager
 from .database import init_db, DatabaseManager
+from .components.status_history import StatusHistoryComponent
 
 app = FastAPI(title="Pythus - Service Health Monitor")
 templates = Jinja2Templates(directory="pythus/templates")
@@ -31,8 +32,9 @@ templates.env.filters["datetime"] = format_datetime
 monitor_manager = MonitorManager()
 config: Config = None
 db_manager: Optional[DatabaseManager] = None
+status_history = StatusHistoryComponent(templates)
 
-
+# Setup routes
 @app.on_event("startup")
 async def startup_event():
     global config, db_manager
@@ -44,43 +46,22 @@ async def startup_event():
         # Load configuration
         config = Config.from_env()
         
-        # Initialize monitors for each endpoint
-        for endpoint in config.endpoints:
-            # Create monitor config
-            monitor_config = {
-                'name': endpoint.name,
-                'group': endpoint.group,
-                'url': endpoint.url,
-                'type': 'dns' if endpoint.dns else 'http'
-            }
-            
-            # Add DNS configuration if present
-            if endpoint.dns:
-                monitor_config['dns'] = {
-                    'query_name': endpoint.dns.query_name,
-                    'query_type': endpoint.dns.query_type
-                }
-            
-            # Add SSL checks to GitHub and Google HTTP monitors with a 30-day minimum validity requirement
-            if endpoint.name == 'github-http' or endpoint.name == 'google-http':
-                monitor_config['checks'] = {
-                    'status': 200,
-                    'max_response_time': 2000 if endpoint.name == 'github-http' else 1000,
-                    'ssl': {
-                        'min_days_valid': 30
-                    }
-                }
-            
+        # Initialize monitors
+        for monitor_config in config.monitors:
             # Add monitor to database
             monitor_id = db_manager.add_monitor(
-                name=endpoint.name,
-                group=endpoint.group,
-                url=endpoint.url,
-                config=monitor_config
+                name=monitor_config.name,
+                group=monitor_config.group or 'Default',
+                url=monitor_config.url,
+                config=monitor_config.dict()
             )
             
+            # Add db_id to monitor config
+            monitor_config_dict = monitor_config.dict()
+            monitor_config_dict['db_id'] = monitor_id
+            
             # Create and configure monitor
-            monitor = monitor_manager.add_monitor(endpoint.name, monitor_config)
+            monitor = monitor_manager.add_monitor(monitor_config.name, monitor_config_dict)
             monitor.db_id = monitor_id  # Store database ID in monitor
             
         # Start background monitoring tasks
@@ -128,8 +109,9 @@ async def run_monitors():
                 
         except Exception as e:
             print(f"Error running monitors: {e}")
-        
-        await asyncio.sleep(5)  # Check every 5 seconds
+            
+        # Wait a short time before checking again
+        await asyncio.sleep(1)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -137,15 +119,15 @@ async def home(request: Request):
     """Render the dashboard."""
     monitors = []
     for name, monitor in monitor_manager.monitors.items():
-        # Get latest checks from database
-        history = db_manager.get_monitor_history(monitor.db_id)
+        # Get latest checks from database (limit to 10 most recent)
+        history = db_manager.get_monitor_history(monitor.db_id, limit=10)
         latest_checks = history['checks'][:5] if history and 'checks' in history else []
         
         monitor_data = {
             "name": name,
             "db_id": monitor.db_id,
             "config": monitor.config,
-            "last_check": monitor.last_check,
+            "last_check": monitor.last_check_result or {},
             "checks": latest_checks
         }
         monitors.append(monitor_data)
@@ -158,7 +140,8 @@ async def home(request: Request):
         {
             "request": request,
             "title": "Pythus - Service Health Monitor",
-            "monitors": monitors
+            "monitors": monitors,
+            "status_history": await status_history.render(request, monitors)
         }
     )
 
@@ -222,6 +205,23 @@ async def get_monitor_history(
     return history
 
 
+@app.get("/api/monitors")
+async def get_monitors():
+    """Get all monitors and their status."""
+    monitors = []
+    for name, monitor in monitor_manager.monitors.items():
+        monitor_data = {
+            'id': getattr(monitor, 'db_id', None),
+            'name': name,
+            'url': monitor.config['url'],
+            'type': monitor.config.get('type', 'unknown'),
+            'last_check': monitor.last_check_result or {},
+            'history': monitor.history
+        }
+        monitors.append(monitor_data)
+    return monitors
+
+
 @app.get("/api/endpoints")
 async def get_endpoints():
     """Get all endpoints and their current status."""
@@ -235,7 +235,7 @@ async def get_endpoints():
             "name": name,
             "id": monitor.db_id,  # Use db_id for consistent identification
             "config": monitor.config,
-            "last_check": monitor.last_check,
+            "last_check": monitor.last_check_result or {},
             "checks": latest_checks
         }
         monitors.append(monitor_data)
@@ -258,7 +258,7 @@ async def get_endpoint(name: str):
         "group": monitor.config.get('group', 'default'),
         "url": monitor.config.get('url', ''),
         "type": monitor.config.get('type', 'http'),
-        "last_check": monitor.last_check,
+        "last_check": monitor.last_check_result or {},
         "config": monitor.config,
         "results": monitor.results
     }
@@ -291,3 +291,93 @@ async def get_endpoint_history(
         "type": monitor.config.get('type', 'http'),
         "history": history
     }
+
+
+@app.get("/api/monitors/history")
+async def get_monitor_history():
+    """Get historical data for all monitors."""
+    try:
+        now = datetime.now()
+        six_hours_ago = now - timedelta(hours=6)
+        
+        # Initialize time points (every 5 minutes for the last 6 hours)
+        time_points = []
+        current = six_hours_ago
+        while current <= now:
+            time_points.append(current.strftime("%H:%M"))
+            current += timedelta(minutes=5)
+
+        # Get monitor data
+        monitor_names = []
+        status_data = []
+        
+        for name, monitor in sorted(
+            monitor_manager.monitors.items(),
+            key=lambda x: (x[1].config.get('group', 'Default'), x[0])
+        ):
+            try:
+                monitor_names.append(name)
+                monitor_history = []
+                
+                # Get history from database with time range
+                history = db_manager.get_monitor_history(monitor.db_id, six_hours_ago, now)
+                if not history:
+                    # If monitor has no history, fill with unknown status
+                    monitor_history = [1] * len(time_points)  # 1 represents unknown status
+                else:
+                    checks = history.get('checks', [])
+                    
+                    # Create status map for quick lookup
+                    status_map = {}
+                    for check in checks:
+                        try:
+                            check_time = datetime.fromisoformat(check['timestamp'])
+                            if six_hours_ago <= check_time <= now:
+                                time_key = check_time.strftime("%H:%M")
+                                status_map[time_key] = 2 if check.get('success', False) else 0
+                        except (ValueError, KeyError) as e:
+                            print(f"Error processing check for {name}: {e}")
+                            continue
+
+                    # Fill in status data for each time point
+                    for time_point in time_points:
+                        status = status_map.get(time_point, 1)  # 1 is unknown/no data
+                        monitor_history.append(status)
+                        
+                status_data.append(monitor_history)
+            except Exception as e:
+                print(f"Error processing monitor {name}: {e}")
+                # Add empty history for failed monitor
+                status_data.append([1] * len(time_points))
+        
+        result = {
+            "monitors": monitor_names,
+            "timePoints": time_points,
+            "statusData": status_data
+        }
+        return result
+    except Exception as e:
+        print(f"Error in get_monitor_history: {e}")
+        return {
+            "monitors": [],
+            "timePoints": [],
+            "statusData": []
+        }
+
+
+@app.get("/logs")
+async def logs(request: Request, page: int = 1):
+    """Render the logs page."""
+    logs_data = db_manager.get_logs(page=page)
+    return templates.TemplateResponse(
+        "logs.html",
+        {
+            "request": request,
+            "logs": logs_data['logs'],
+            "page": logs_data['page'],
+            "total_pages": logs_data['total_pages'],
+            "has_next": logs_data['has_next'],
+            "has_prev": logs_data['has_prev'],
+            "total_count": logs_data['total_count']
+        }
+    )

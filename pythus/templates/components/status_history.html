@@ -1,0 +1,114 @@
+<!-- Status History Component -->
+<div class="mt-8 bg-white rounded-lg shadow p-6">
+    <h2 class="text-lg font-semibold mb-4">Status History (Last 6 Hours)</h2>
+    <div id="status-history" class="w-full" style="height: 200px;">
+        <!-- Highcharts will render here -->
+    </div>
+</div>
+
+<script>
+    const statusHistory = {
+        chart: null,
+        
+        updateChart: async function() {
+            try {
+                const response = await fetch('/api/monitors/history');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (!data || !data.monitors || !data.timePoints || !data.statusData || 
+                    data.monitors.length === 0 || data.timePoints.length === 0) {
+                    console.log('No monitor data available');
+                    // Clear the chart if it exists
+                    if (this.chart) {
+                        this.chart.destroy();
+                        this.chart = null;
+                    }
+                    return;
+                }
+
+                const chartData = data.statusData.map((monitorData, i) => 
+                    monitorData.map((value, j) => [j, i, value])
+                ).flat();
+
+                const options = {
+                    chart: {
+                        type: 'heatmap',
+                        marginTop: 40,
+                        marginBottom: 80,
+                        plotBorderWidth: 1
+                    },
+                    title: {
+                        text: 'Monitor Status History'
+                    },
+                    xAxis: {
+                        categories: data.timePoints,
+                        labels: {
+                            rotation: -45
+                        }
+                    },
+                    yAxis: {
+                        categories: data.monitors,
+                        title: null,
+                        reversed: true
+                    },
+                    colorAxis: {
+                        stops: [
+                            [0, '#ff4444'],  // Error (red)
+                            [0.5, '#ffeb3b'], // Unknown (yellow)
+                            [1, '#4caf50']    // Success (green)
+                        ],
+                        min: 0,
+                        max: 2
+                    },
+                    legend: {
+                        align: 'right',
+                        layout: 'vertical',
+                        margin: 0,
+                        verticalAlign: 'top',
+                        y: 25,
+                        symbolHeight: 280
+                    },
+                    tooltip: {
+                        formatter: function () {
+                            const status = this.point.value === 2 ? 'Success' : 
+                                         this.point.value === 1 ? 'Unknown' : 'Error';
+                            return `<b>${this.series.yAxis.categories[this.point.y]}</b><br/>` +
+                                   `Time: ${this.series.xAxis.categories[this.point.x]}<br/>` +
+                                   `Status: ${status}`;
+                        }
+                    },
+                    series: [{
+                        name: 'Status',
+                        borderWidth: 1,
+                        data: chartData,
+                        dataLabels: {
+                            enabled: false
+                        }
+                    }]
+                };
+
+                if (!this.chart) {
+                    this.chart = Highcharts.chart('status-history', options);
+                } else {
+                    this.chart.update(options);
+                }
+            } catch (error) {
+                console.error('Error updating status history:', error);
+                // Don't destroy the chart on temporary errors
+            }
+        },
+
+        init: function() {
+            this.updateChart();
+            // Update every minute
+            setInterval(() => this.updateChart(), 60000);
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        statusHistory.init();
+    });
+</script>

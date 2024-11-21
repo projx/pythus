@@ -7,15 +7,15 @@ endpoints:
       - "[STATUS] == 200"
       - "[RESPONSE_TIME] < 1000"
 
-  - name: cloudflare-dns
-    group: dns
-    url: "8.8.8.8"
-    interval: 5m
-    dns:
-      query-name: "cloudflare.com"
-      query-type: "A"
-    conditions:
-      - "[DNS_RCODE] == NOERROR"
+  # - name: cloudflare-dns
+  #   group: dns
+  #   url: "8.8.8.8"
+  #   interval: 5m
+  #   dns:
+  #     query-name: "cloudflare.com"
+  #     query-type: "A"
+  #   conditions:
+  #     - "[DNS_RCODE] == NOERROR"
 
   - name: github
     group: external
@@ -42,25 +42,25 @@ endpoints:
       - "[RESPONSE_TIME] < 2000"
       - "[CERTIFICATE_EXPIRATION] > 48h"
 
-  - name: cloudflare-dns-test
-    group: dns-services
-    url: "1.1.1.1"
-    interval: 30s
-    dns:
-      query-name: "google.com"
-      query-type: "A"
-    conditions:
-      - "[DNS_RCODE] == NOERROR"
+  # - name: cloudflare-dns-test
+  #   group: dns-services
+  #   url: "1.1.1.1"
+  #   interval: 30s
+  #   dns:
+  #     query-name: "google.com"
+  #     query-type: "A"
+  #   conditions:
+  #     - "[DNS_RCODE] == NOERROR"
 
-  - name: google-dns-test
-    group: dns-services
-    url: "8.8.8.8"
-    interval: 30s
-    dns:
-      query-name: "github.com"
-      query-type: "A"
-    conditions:
-      - "[DNS_RCODE] == NOERROR"
+  # - name: google-dns-test
+  #   group: dns-services
+  #   url: "8.8.8.8"
+  #   interval: 30s
+  #   dns:
+  #     query-name: "github.com"
+  #     query-type: "A"
+  #   conditions:
+  #     - "[DNS_RCODE] == NOERROR"
 
   - name: local-network
     group: internal
