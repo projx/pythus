@@ -200,31 +200,26 @@ class DatabaseManager:
         with self.session_factory() as session:
             # Get total count for pagination
             total_count = session.query(Log).count()
+            total_pages = (total_count + per_page - 1) // per_page
             
-            # Calculate offset
-            offset = (page - 1) * per_page
-            
-            # Get logs with monitor info
-            logs = session.query(Log, Monitor.name.label('monitor_name'))\
-                .join(Monitor)\
-                .order_by(Log.created_at.desc())\
-                .offset(offset)\
-                .limit(per_page)\
+            # Get logs for current page
+            logs = session.query(Log).order_by(Log.created_at.desc()) \
+                .offset((page - 1) * per_page) \
+                .limit(per_page) \
                 .all()
             
-            # Calculate pagination info
-            total_pages = (total_count + per_page - 1) // per_page
-            has_next = page < total_pages
-            has_prev = page > 1
-            
             return {
-                'logs': logs,
-                'page': page,
-                'per_page': per_page,
-                'total_pages': total_pages,
-                'has_next': has_next,
-                'has_prev': has_prev,
-                'total_count': total_count
+                'logs': [
+                    {
+                        'monitor_id': log.monitor_id,
+                        'level': log.level,
+                        'message': log.message,
+                        'details': log.details,
+                        'created_at': log.created_at
+                    }
+                    for log in logs
+                ],
+                'total_pages': total_pages
             }
 
     def get_monitor_by_id(self, monitor_id: int):

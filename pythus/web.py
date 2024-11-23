@@ -385,7 +385,10 @@ async def logs(request: Request, page: int = 1):
     for log in logs_data['logs']:
         monitor = db_manager.get_monitor_by_id(log['monitor_id'])
         monitor_name = monitor['name'] if monitor else 'Unknown Monitor'
-        logs_with_monitors.append((log, monitor_name))
+        logs_with_monitors.append({
+            "log": log,
+            "monitor_name": monitor_name
+        })
     
     return templates.TemplateResponse(
         "logs.html",
