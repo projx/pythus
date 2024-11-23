@@ -4,9 +4,6 @@
 <div class="container mx-auto px-4 py-8">
     <div class="flex justify-between items-center mb-8">
         <h1 class="text-2xl font-bold">System Logs</h1>
-        <div class="text-sm text-gray-500">
-            Showing {{ total_count }} logs
-        </div>
     </div>
 
     <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -60,7 +57,7 @@
         <div class="flex-1 flex justify-between items-center">
             <div>
                 {% if has_prev %}
-                <a href="/logs?page={{ page - 1 }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                <a href="/logs?page={{ current_page - 1 }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                     Previous
                 </a>
                 {% else %}
@@ -70,11 +67,11 @@
                 {% endif %}
             </div>
             <div class="text-sm text-gray-700">
-                Page <span class="font-medium">{{ page }}</span> of <span class="font-medium">{{ total_pages }}</span>
+                Page <span class="font-medium">{{ current_page }}</span> of <span class="font-medium">{{ total_pages }}</span>
             </div>
             <div>
                 {% if has_next %}
-                <a href="/logs?page={{ page + 1 }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                <a href="/logs?page={{ current_page + 1 }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                     Next
                 </a>
                 {% else %}

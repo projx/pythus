@@ -304,11 +304,15 @@ async def get_monitor_history():
         time_points = []
         current = six_hours_ago
         while current <= now:
-            time_points.append(current.strftime("%H:%M"))
+            # Only include the hour label for full hours
+            if current.minute == 0:
+                time_points.append({"time": current.strftime("%H:%M"), "isHour": True})
+            else:
+                time_points.append({"time": current.strftime("%H:%M"), "isHour": False})
             current += timedelta(minutes=5)
 
         # Get monitor data
-        monitor_names = []
+        monitors = []
         status_data = []
         
         for name, monitor in sorted(
@@ -316,7 +320,12 @@ async def get_monitor_history():
             key=lambda x: (x[1].config.get('group', 'Default'), x[0])
         ):
             try:
-                monitor_names.append(name)
+                # Include monitor metadata
+                monitors.append({
+                    "name": name,
+                    "type": monitor.config.get('type', 'http'),
+                    "group": monitor.config.get('group', 'Default')
+                })
                 monitor_history = []
                 
                 # Get history from database with time range
@@ -341,7 +350,7 @@ async def get_monitor_history():
 
                     # Fill in status data for each time point
                     for time_point in time_points:
-                        status = status_map.get(time_point, 1)  # 1 is unknown/no data
+                        status = status_map.get(time_point["time"], 1)  # 1 is unknown/no data
                         monitor_history.append(status)
                         
                 status_data.append(monitor_history)
@@ -351,7 +360,7 @@ async def get_monitor_history():
                 status_data.append([1] * len(time_points))
         
         result = {
-            "monitors": monitor_names,
+            "monitors": monitors,
             "timePoints": time_points,
             "statusData": status_data
         }
@@ -365,19 +374,27 @@ async def get_monitor_history():
         }
 
 
-@app.get("/logs")
+@app.get("/logs", response_class=HTMLResponse)
 async def logs(request: Request, page: int = 1):
     """Render the logs page."""
-    logs_data = db_manager.get_logs(page=page)
+    per_page = 100
+    logs_data = db_manager.get_logs(page=page, per_page=per_page)
+    
+    # Get monitor names for each log
+    logs_with_monitors = []
+    for log in logs_data['logs']:
+        monitor = db_manager.get_monitor_by_id(log['monitor_id'])
+        monitor_name = monitor['name'] if monitor else 'Unknown Monitor'
+        logs_with_monitors.append((log, monitor_name))
+    
     return templates.TemplateResponse(
         "logs.html",
         {
             "request": request,
-            "logs": logs_data['logs'],
-            "page": logs_data['page'],
+            "logs": logs_with_monitors,
             "total_pages": logs_data['total_pages'],
-            "has_next": logs_data['has_next'],
-            "has_prev": logs_data['has_prev'],
-            "total_count": logs_data['total_count']
+            "current_page": page,
+            "has_next": page < logs_data['total_pages'],
+            "has_prev": page > 1
         }
     )

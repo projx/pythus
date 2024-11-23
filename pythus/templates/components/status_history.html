@@ -1,7 +1,7 @@
 <!-- Status History Component -->
 <div class="mt-8 bg-white rounded-lg shadow p-6">
     <h2 class="text-lg font-semibold mb-4">Status History (Last 6 Hours)</h2>
-    <div id="status-history" class="w-full" style="height: 200px;">
+    <div id="status-history" class="w-full" style="height: 300px;">
         <!-- Highcharts will render here -->
     </div>
 </div>
@@ -38,21 +38,45 @@
                         type: 'heatmap',
                         marginTop: 40,
                         marginBottom: 80,
+                        marginRight: 120,
                         plotBorderWidth: 1
                     },
                     title: {
                         text: 'Monitor Status History'
                     },
                     xAxis: {
-                        categories: data.timePoints,
+                        categories: data.timePoints.map(tp => tp.time),
                         labels: {
-                            rotation: -45
-                        }
+                            rotation: -45,
+                            formatter: function() {
+                                // this.value is the index in the categories array
+                                if (data.timePoints[this.pos].isHour) {
+                                    return data.timePoints[this.pos].time;
+                                }
+                                return '';
+                            },
+                            style: {
+                                fontSize: '10px'
+                            }
+                        },
+                        tickLength: 0,
+                        gridLineWidth: 1,
+                        gridLineColor: '#E5E7EB',
+                        gridZIndex: 1
                     },
                     yAxis: {
-                        categories: data.monitors,
+                        categories: data.monitors.map(m => m.name),
                         title: null,
-                        reversed: true
+                        reversed: true,
+                        labels: {
+                            formatter: function() {
+                                const monitor = data.monitors[this.pos];
+                                if (!monitor) return '';
+                                return `<span style="font-weight: bold;">${monitor.name}</span><br/>` +
+                                       `<span style="color: #666; font-size: 0.8em;">${monitor.type} | ${monitor.group}</span>`;
+                            },
+                            useHTML: true
+                        }
                     },
                     colorAxis: {
                         stops: [
@@ -69,15 +93,30 @@
                         margin: 0,
                         verticalAlign: 'top',
                         y: 25,
-                        symbolHeight: 280
+                        symbolHeight: 280,
+                        title: {
+                            text: 'Status'
+                        }
                     },
                     tooltip: {
                         formatter: function () {
+                            const monitor = data.monitors[this.point.y];
+                            if (!monitor) return '';
                             const status = this.point.value === 2 ? 'Success' : 
                                          this.point.value === 1 ? 'Unknown' : 'Error';
-                            return `<b>${this.series.yAxis.categories[this.point.y]}</b><br/>` +
-                                   `Time: ${this.series.xAxis.categories[this.point.x]}<br/>` +
+                            const timePoint = data.timePoints[this.point.x];
+                            if (!timePoint) return '';
+                            return `<b>${monitor.name}</b><br/>` +
+                                   `Type: ${monitor.type}<br/>` +
+                                   `Group: ${monitor.group}<br/>` +
+                                   `Time: ${timePoint.time}<br/>` +
                                    `Status: ${status}`;
+                        }
+                    },
+                    plotOptions: {
+                        heatmap: {
+                            borderWidth: 1,
+                            borderColor: '#ffffff'
                         }
                     },
                     series: [{
@@ -86,6 +125,11 @@
                         data: chartData,
                         dataLabels: {
                             enabled: false
+                        },
+                        states: {
+                            hover: {
+                                brightness: 0.2
+                            }
                         }
                     }]
                 };

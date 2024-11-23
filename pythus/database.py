@@ -227,6 +227,20 @@ class DatabaseManager:
                 'total_count': total_count
             }
 
+    def get_monitor_by_id(self, monitor_id: int):
+        """Get monitor by ID."""
+        with self.session_factory() as session:
+            monitor = session.query(Monitor).filter(Monitor.id == monitor_id).first()
+            if monitor:
+                return {
+                    'id': monitor.id,
+                    'name': monitor.name,
+                    'group': monitor.group,
+                    'url': monitor.url,
+                    'config': monitor.config
+                }
+            return None
+
 # Create global database manager instance
 Session = init_db()
 db_manager = DatabaseManager(Session)
