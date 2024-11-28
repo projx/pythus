@@ -135,13 +135,17 @@ async def home(request: Request):
     # Sort monitors by group and name
     monitors.sort(key=lambda m: (m['config'].get('group', 'Default'), m['name']))
     
+    # Prepare status history data
+    history_data = status_history.prepare_history_data(monitors)
+    
     return templates.TemplateResponse(
         "index.html",
         {
             "request": request,
             "title": "Pythus - Service Health Monitor",
             "monitors": monitors,
-            "status_history": await status_history.render(request, monitors)
+            "status_history": await status_history.render(request, monitors),
+            "history_data": history_data
         }
     )
 

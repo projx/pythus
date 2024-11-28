@@ -1,158 +1,209 @@
 <!-- Status History Component -->
 <div class="mt-8 bg-white rounded-lg shadow p-6">
     <h2 class="text-lg font-semibold mb-4">Status History (Last 6 Hours)</h2>
-    <div id="status-history" class="w-full" style="height: 300px;">
-        <!-- Highcharts will render here -->
+    <div id="status-history" class="w-full" style="height: 400px;">
+        <!-- eCharts will render here -->
     </div>
 </div>
 
 <script>
-    const statusHistory = {
-        chart: null,
-        
-        updateChart: async function() {
-            try {
-                const response = await fetch('/api/monitors/history');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                
-                if (!data || !data.monitors || !data.timePoints || !data.statusData || 
-                    data.monitors.length === 0 || data.timePoints.length === 0) {
-                    console.log('No monitor data available');
-                    // Clear the chart if it exists
-                    if (this.chart) {
-                        this.chart.destroy();
-                        this.chart = null;
-                    }
+    (function() {
+        const statusHistory = {
+            chart: null,
+            
+            updateChart: async function() {
+                if (typeof echarts === 'undefined') {
+                    console.error('eCharts library not loaded');
                     return;
                 }
 
-                const chartData = data.statusData.map((monitorData, i) => 
-                    monitorData.map((value, j) => [j, i, value])
-                ).flat();
+                try {
+                    const response = await fetch('/api/monitors/history');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    if (!data || !data.monitors || !data.timePoints || !data.statusData || 
+                        data.monitors.length === 0 || data.timePoints.length === 0) {
+                        console.log('No monitor data available');
+                        // Clear the chart if it exists
+                        if (this.chart) {
+                            this.chart.dispose();
+                            this.chart = null;
+                        }
+                        return;
+                    }
 
-                const options = {
-                    chart: {
-                        type: 'heatmap',
-                        marginTop: 40,
-                        marginBottom: 80,
-                        marginRight: 120,
-                        plotBorderWidth: 1
-                    },
-                    title: {
-                        text: 'Monitor Status History'
-                    },
-                    xAxis: {
-                        categories: data.timePoints.map(tp => tp.time),
-                        labels: {
-                            rotation: -45,
-                            formatter: function() {
-                                // this.value is the index in the categories array
-                                if (data.timePoints[this.pos].isHour) {
-                                    return data.timePoints[this.pos].time;
+                    const options = {
+                        tooltip: {
+                            position: 'top',
+                            formatter: function (params) {
+                                const monitor = data.monitors[params.data[1]];
+                                const status = params.data[2] === 2 ? 'Success' : 
+                                             params.data[2] === 1 ? 'Unknown' : 'Error';
+                                return `<strong>${monitor.name}</strong><br/>` +
+                                       `Type: ${monitor.type}<br/>` +
+                                       `Group: ${monitor.group}<br/>` +
+                                       `Time: ${data.timePoints[params.data[0]].time}<br/>` +
+                                       `Status: ${status}`;
+                            }
+                        },
+                        grid: {
+                            top: '60px',
+                            right: '15%',
+                            bottom: '60px',
+                            left: '400px'  // Space for monitor names and info
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: data.timePoints.map(tp => tp.time),
+                            splitArea: {
+                                show: true
+                            },
+                            axisLabel: {
+                                rotate: -45,
+                                formatter: function(value, index) {
+                                    return data.timePoints[index].isHour ? value : '';
                                 }
-                                return '';
-                            },
-                            style: {
-                                fontSize: '10px'
                             }
                         },
-                        tickLength: 0,
-                        gridLineWidth: 1,
-                        gridLineColor: '#E5E7EB',
-                        gridZIndex: 1
-                    },
-                    yAxis: {
-                        categories: data.monitors.map(m => m.name),
-                        title: null,
-                        reversed: true,
-                        labels: {
-                            formatter: function() {
-                                const monitor = data.monitors[this.pos];
-                                if (!monitor) return '';
-                                return `<span style="font-weight: bold;">${monitor.name}</span><br/>` +
-                                       `<span style="color: #666; font-size: 0.8em;">${monitor.type} | ${monitor.group}</span>`;
+                        yAxis: {
+                            type: 'category',
+                            data: data.monitors.map((m, index) => ({
+                                value: index,
+                                textStyle: {
+                                    rich: {
+                                        name: {
+                                            fontWeight: 'bold',
+                                            width: 200,
+                                            overflow: 'truncate',
+                                            align: 'left'
+                                        },
+                                        type: {
+                                            color: '#666',
+                                            width: 100,
+                                            align: 'left',
+                                            padding: [0, 0, 0, 10]
+                                        },
+                                        group: {
+                                            color: '#666',
+                                            width: 100,
+                                            align: 'left',
+                                            padding: [0, 0, 0, 10]
+                                        }
+                                    }
+                                }
+                            })),
+                            splitArea: {
+                                show: true
                             },
-                            useHTML: true
-                        }
-                    },
-                    colorAxis: {
-                        stops: [
-                            [0, '#ff4444'],  // Error (red)
-                            [0.5, '#ffeb3b'], // Unknown (yellow)
-                            [1, '#4caf50']    // Success (green)
-                        ],
-                        min: 0,
-                        max: 2
-                    },
-                    legend: {
-                        align: 'right',
-                        layout: 'vertical',
-                        margin: 0,
-                        verticalAlign: 'top',
-                        y: 25,
-                        symbolHeight: 280,
-                        title: {
-                            text: 'Status'
-                        }
-                    },
-                    tooltip: {
-                        formatter: function () {
-                            const monitor = data.monitors[this.point.y];
-                            if (!monitor) return '';
-                            const status = this.point.value === 2 ? 'Success' : 
-                                         this.point.value === 1 ? 'Unknown' : 'Error';
-                            const timePoint = data.timePoints[this.point.x];
-                            if (!timePoint) return '';
-                            return `<b>${monitor.name}</b><br/>` +
-                                   `Type: ${monitor.type}<br/>` +
-                                   `Group: ${monitor.group}<br/>` +
-                                   `Time: ${timePoint.time}<br/>` +
-                                   `Status: ${status}`;
-                        }
-                    },
-                    plotOptions: {
-                        heatmap: {
-                            borderWidth: 1,
-                            borderColor: '#ffffff'
-                        }
-                    },
-                    series: [{
-                        name: 'Status',
-                        borderWidth: 1,
-                        data: chartData,
-                        dataLabels: {
-                            enabled: false
-                        },
-                        states: {
-                            hover: {
-                                brightness: 0.2
+                            axisLabel: {
+                                formatter: function(value) {
+                                    const monitor = data.monitors[value];
+                                    return `{name|${monitor.name}}{type|${monitor.type}}{group|${monitor.group}}`;
+                                },
+                                rich: {
+                                    name: {
+                                        fontWeight: 'bold',
+                                        width: 200,
+                                        overflow: 'truncate',
+                                        align: 'left'
+                                    },
+                                    type: {
+                                        color: '#666',
+                                        width: 100,
+                                        align: 'left',
+                                        padding: [0, 0, 0, 10]
+                                    },
+                                    group: {
+                                        color: '#666',
+                                        width: 100,
+                                        align: 'left',
+                                        padding: [0, 0, 0, 10]
+                                    }
+                                }
                             }
-                        }
-                    }]
-                };
+                        },
+                        visualMap: {
+                            type: 'piecewise',
+                            right: 0,
+                            top: 'center',
+                            orient: 'vertical',
+                            pieces: [
+                                {min: 2, max: 2, color: '#4caf50', label: 'Success'},  // Green
+                                {min: 1, max: 1, color: '#ffeb3b', label: 'Unknown'},  // Yellow
+                                {min: 0, max: 0, color: '#ff4444', label: 'Error'}     // Red
+                            ]
+                        },
+                        series: [{
+                            name: 'Status',
+                            type: 'heatmap',
+                            data: data.statusData.reduce((acc, row, i) => {
+                                return acc.concat(row.map((value, j) => [j, i, value]));
+                            }, []),
+                            label: {
+                                show: false
+                            },
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }]
+                    };
 
-                if (!this.chart) {
-                    this.chart = Highcharts.chart('status-history', options);
-                } else {
-                    this.chart.update(options);
+                    if (!this.chart) {
+                        const container = document.getElementById('status-history');
+                        if (!container) {
+                            console.error('Status history container not found');
+                            return;
+                        }
+                        // Initialize eCharts
+                        this.chart = echarts.init(container);
+                        
+                        // Handle window resize
+                        window.addEventListener('resize', () => {
+                            if (this.chart) {
+                                this.chart.resize();
+                            }
+                        });
+                    }
+                    this.chart.setOption(options, true);  // Use true to clear previous options
+                } catch (error) {
+                    console.error('Error updating status history:', error);
                 }
-            } catch (error) {
-                console.error('Error updating status history:', error);
-                // Don't destroy the chart on temporary errors
+            },
+
+            init: function() {
+                // Wait for eCharts to be loaded
+                const checkECharts = () => {
+                    if (typeof echarts !== 'undefined') {
+                        // Wait a short time to ensure DOM is ready
+                        setTimeout(() => {
+                            this.updateChart();
+                            // Update every minute
+                            setInterval(() => this.updateChart(), 60000);
+                            
+                            // Listen for monitor updates
+                            document.addEventListener('monitorsUpdated', () => {
+                                this.updateChart();
+                            });
+                        }, 100);
+                    } else {
+                        setTimeout(checkECharts, 100);
+                    }
+                };
+                checkECharts();
             }
-        },
+        };
 
-        init: function() {
-            this.updateChart();
-            // Update every minute
-            setInterval(() => this.updateChart(), 60000);
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => statusHistory.init());
+        } else {
+            statusHistory.init();
         }
-    };
-
-    document.addEventListener('DOMContentLoaded', () => {
-        statusHistory.init();
-    });
+    })();
 </script>

@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
-    <script src="https://code.highcharts.com/highcharts.js"></script>
-    <script src="https://code.highcharts.com/modules/heatmap.js"></script>
-    <script src="https://code.highcharts.com/modules/exporting.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -133,7 +131,9 @@
         </div>
     </nav>
 
-    <!-- Main Content -->
+    {% extends "base.html" %}
+
+    {% block content %}
     <main class="container mx-auto px-4 py-8">
         <div id="endpoints" class="space-y-8">
             {% for group_name, group_monitors in monitors|groupby('config.group', default='Default') %}
@@ -160,21 +160,12 @@
                         </p>
                         <div class="space-y-2">
                             {% if monitor.checks %}
-                                {% if monitor.checks is mapping %}
-                                    {% for name, check in monitor.checks.items() %}
-                                    <div class="flex items-center justify-between text-sm">
-                                        <span class="font-medium">{{ name }}</span>
-                                        <span class="{% if check.success %}text-green-600{% else %}text-red-600{% endif %}">{{ check.message }}</span>
-                                    </div>
-                                    {% endfor %}
-                                {% else %}
-                                    {% for check in monitor.checks %}
-                                    <div class="flex items-center justify-between text-sm">
-                                        <span class="font-medium">{{ check.type }}</span>
-                                        <span class="{% if check.success %}text-green-600{% else %}text-red-600{% endif %}">{{ check.message }}</span>
-                                    </div>
-                                    {% endfor %}
-                                {% endif %}
+                                {% for check in monitor.checks %}
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="font-medium">{{ check.name }}</span>
+                                    <span class="{% if check.success %}text-green-600{% else %}text-red-600{% endif %}">{{ check.message }}</span>
+                                </div>
+                                {% endfor %}
                             {% endif %}
                         </div>
                         {% if monitor.last_check and monitor.last_check.timestamp %}
@@ -188,30 +179,33 @@
             </div>
             {% endfor %}
         </div>
-        
-        <!-- Status History Section -->
+
+        <!-- Include Status History Component -->
         {{ status_history | safe }}
-        
-        <script>
-            async function updateMonitors() {
-                try {
-                    const response = await fetch('/api/monitors');
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    
-                    // Notify status history component
-                    document.dispatchEvent(new CustomEvent('monitorsUpdated'));
-                } catch (error) {
-                    console.error('Failed to fetch monitors:', error);
-                }
-            }
-            
-            document.addEventListener('DOMContentLoaded', () => {
-                updateMonitors();
-                setInterval(updateMonitors, 10000);
-            });
-        </script>
     </main>
+    {% endblock %}
+
+    {% block scripts %}
+    <script>
+        async function updateMonitors() {
+            try {
+                const response = await fetch('/api/monitors');
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                
+                // Notify status history component
+                document.dispatchEvent(new CustomEvent('monitorsUpdated'));
+            } catch (error) {
+                console.error('Failed to fetch monitors:', error);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            updateMonitors();
+            setInterval(updateMonitors, 10000);
+        });
+    </script>
+    {% endblock %}
 </body>
 </html>
